@@ -1,0 +1,9 @@
+# Verificado con Python 3.14 en Windows. Las versiones minimas son las que se
+# probaron; FastF1 arrastra pandas, numpy, matplotlib y requests-cache.
+streamlit>=1.40
+fastf1>=3.5
+plotly>=5.22
+pandas>=2.2
+numpy>=1.26
+requests>=2.32
+scipy>=1.13

@@ -1,0 +1,11 @@
+# Cache en disco de FastF1: se regenera solo y pesa cientos de MB.
+cache/
+
+# Entorno virtual local
+.venv/
+venv/
+
+__pycache__/
+*.py[cod]
+.streamlit/secrets.toml
+.DS_Store
