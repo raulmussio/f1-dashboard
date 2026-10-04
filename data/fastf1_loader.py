@@ -122,16 +122,23 @@ def load_session(year: int, round_number: int, session_name: str, *, laps: bool 
             f"La telemetria y los tiempos por vuelta empiezan en {TELEMETRY_MIN_YEAR}."
         )
     enable_cache()
+    # La comprobacion de vueltas va DENTRO del try a proposito: cuando `load()`
+    # falla a medias -por ejemplo si el servidor no alcanza la API de F1- no
+    # levanta excepcion, pero el primer acceso a `session.laps` lanza
+    # `DataNotLoadedError`. Dejarlo fuera hacia que esa excepcion escapara y
+    # tirara abajo la aplicacion entera con un traceback, en vez de mostrar el
+    # mensaje explicativo de esta funcion.
     try:
         session = fastf1.get_session(year, round_number, session_name)
         session.load(laps=laps, telemetry=True, weather=True, messages=True)
+        session_laps = session.laps if laps else None
     except Exception as exc:  # noqa: BLE001
         raise TelemetryUnavailable(
             f"No se pudo cargar {session_name} de la ronda {round_number} de {year} "
-            f"desde FastF1: {exc}"
+            f"desde FastF1: {type(exc).__name__}: {exc}"
         ) from exc
 
-    if laps and (session.laps is None or len(session.laps) == 0):
+    if laps and (session_laps is None or len(session_laps) == 0):
         raise TelemetryUnavailable(
             f"FastF1 cargo la sesion {session_name} ({year}, ronda {round_number}) "
             "pero no contiene vueltas. Puede ser una sesion cancelada o sin cronometraje."
