@@ -1,5 +1,17 @@
-# Cache en disco de FastF1: se regenera solo y pesa cientos de MB.
-cache/
+# Cache en disco de FastF1: se regenera solo y pesa mas de 1 GB.
+#
+# Excepcion deliberada: dos sesiones viajan EN el repositorio. La API de
+# cronometraje de Formula 1 rechaza las peticiones desde servidores en la nube,
+# asi que en el despliegue publico FastF1 no puede descargar nada. Con estas dos
+# sesiones cacheadas, las vistas de telemetria funcionan igual sin red.
+# Cada una ocupa ~70-95 MB y ningun archivo suelto llega a 50 MB.
+cache/*
+!cache/2024/
+!cache/2026/
+cache/2024/*
+cache/2026/*
+!cache/2024/2024-09-01_Italian_Grand_Prix/
+!cache/2026/2026-09-26_Azerbaijan_Grand_Prix/
 
 # Entorno virtual local
 .venv/

@@ -44,6 +44,27 @@ DIRTY_TRACK_STATUS = {"2", "3", "4", "5", "6", "7"}
 
 TELEMETRY_CHANNELS = ["Speed", "Throttle", "Brake", "nGear", "RPM", "DRS"]
 
+# Sesiones cuyo cache viaja dentro del repositorio. La API de cronometraje de
+# Formula 1 rechaza las peticiones desde servidores en la nube, asi que en el
+# despliegue publico estas son las unicas que pueden abrirse; en local funciona
+# cualquiera. Mantener sincronizado con las excepciones de `.gitignore`.
+BUNDLED_SESSIONS = {
+    (2024, 16, "Race"): "2024 · Monza · Carrera",
+    (2026, 15, "Race"): "2026 · Baku · Carrera",
+}
+
+
+def bundled_sessions_hint() -> str:
+    """Frase que enumera las sesiones utilizables sin conexion a la API."""
+    if not BUNDLED_SESSIONS:
+        return ""
+    nombres = " y ".join(sorted(BUNDLED_SESSIONS.values()))
+    return (
+        f" En el despliegue publico la API de Formula 1 bloquea las descargas, asi que "
+        f"solo estan disponibles las sesiones incluidas en el repositorio: {nombres}. "
+        "Ejecutando la app en tu maquina funciona cualquier sesion desde 2018."
+    )
+
 
 class TelemetryUnavailable(RuntimeError):
     """No hay datos de FastF1 para lo pedido. El mensaje es apto para la UI."""
@@ -179,6 +200,7 @@ def load_session(year: int, round_number: int, session_name: str, *, laps: bool 
             raise TelemetryUnavailable(
                 f"No se pudo cargar {session_name} de la ronda {round_number} de {year} "
                 f"desde FastF1: {type(exc).__name__}: {exc}."
+                + bundled_sessions_hint()
                 + _format_warnings(warnings_log)
             ) from exc
 
@@ -187,6 +209,7 @@ def load_session(year: int, round_number: int, session_name: str, *, laps: bool 
                 f"FastF1 cargo la sesion {session_name} ({year}, ronda {round_number}) "
                 "pero no contiene vueltas. Puede ser una sesion cancelada, sin "
                 "cronometraje, o que este servidor no alcance la API de Formula 1."
+                + bundled_sessions_hint()
                 + _format_warnings(warnings_log)
             )
     return session
