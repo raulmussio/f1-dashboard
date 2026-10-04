@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 import fastf1
@@ -46,6 +47,42 @@ TELEMETRY_CHANNELS = ["Speed", "Throttle", "Brake", "nGear", "RPM", "DRS"]
 
 class TelemetryUnavailable(RuntimeError):
     """No hay datos de FastF1 para lo pedido. El mensaje es apto para la UI."""
+
+
+class _WarningCollector(logging.Handler):
+    """Guarda las advertencias que FastF1 escribe mientras carga una sesion."""
+
+    def __init__(self, limit: int = 4):
+        super().__init__(level=logging.WARNING)
+        self.limit = limit
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if len(self.messages) < self.limit:
+            self.messages.append(f"{record.name}: {record.getMessage()}")
+
+
+@contextmanager
+def _captured_fastf1_warnings():
+    """Escucha el logger de FastF1 durante un bloque y devuelve lo que dijo.
+
+    FastF1 no levanta excepciones cuando una descarga falla: deja constancia en
+    su logger y sigue. Sin esto, un fallo en un servidor remoto solo se ve como
+    datos ausentes, sin causa.
+    """
+    collector = _WarningCollector()
+    logger = logging.getLogger("fastf1")
+    logger.addHandler(collector)
+    try:
+        yield collector
+    finally:
+        logger.removeHandler(collector)
+
+
+def _format_warnings(collector: _WarningCollector) -> str:
+    if not collector.messages:
+        return ""
+    return " FastF1 reporto: " + " | ".join(collector.messages)
 
 
 # ------------------------------------------------------------------ cache disco
@@ -128,21 +165,30 @@ def load_session(year: int, round_number: int, session_name: str, *, laps: bool 
     # `DataNotLoadedError`. Dejarlo fuera hacia que esa excepcion escapara y
     # tirara abajo la aplicacion entera con un traceback, en vez de mostrar el
     # mensaje explicativo de esta funcion.
-    try:
-        session = fastf1.get_session(year, round_number, session_name)
-        session.load(laps=laps, telemetry=True, weather=True, messages=True)
-        session_laps = session.laps if laps else None
-    except Exception as exc:  # noqa: BLE001
-        raise TelemetryUnavailable(
-            f"No se pudo cargar {session_name} de la ronda {round_number} de {year} "
-            f"desde FastF1: {type(exc).__name__}: {exc}"
-        ) from exc
+    #
+    # Cuando falla, FastF1 no levanta nada: solo escribe advertencias en su
+    # logger. Se capturan para poder decir POR QUE falto el dato en vez de un
+    # generico "no se pudo cargar", que en un servidor remoto no se puede
+    # diagnosticar de otra forma.
+    with _captured_fastf1_warnings() as warnings_log:
+        try:
+            session = fastf1.get_session(year, round_number, session_name)
+            session.load(laps=laps, telemetry=True, weather=True, messages=True)
+            session_laps = session.laps if laps else None
+        except Exception as exc:  # noqa: BLE001
+            raise TelemetryUnavailable(
+                f"No se pudo cargar {session_name} de la ronda {round_number} de {year} "
+                f"desde FastF1: {type(exc).__name__}: {exc}."
+                + _format_warnings(warnings_log)
+            ) from exc
 
-    if laps and (session_laps is None or len(session_laps) == 0):
-        raise TelemetryUnavailable(
-            f"FastF1 cargo la sesion {session_name} ({year}, ronda {round_number}) "
-            "pero no contiene vueltas. Puede ser una sesion cancelada o sin cronometraje."
-        )
+        if laps and (session_laps is None or len(session_laps) == 0):
+            raise TelemetryUnavailable(
+                f"FastF1 cargo la sesion {session_name} ({year}, ronda {round_number}) "
+                "pero no contiene vueltas. Puede ser una sesion cancelada, sin "
+                "cronometraje, o que este servidor no alcance la API de Formula 1."
+                + _format_warnings(warnings_log)
+            )
     return session
 
 
